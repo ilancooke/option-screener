@@ -1,0 +1,22 @@
+# Stable strategy defaults for the cash-secured put screener.
+#
+# Per-run values such as expiration_date, output_path, and symbol_limit are
+# usually supplied as CLI arguments.
+
+option_type: put
+risk_free_rate: 0.0435
+historical_days: 90
+trading_days: 252
+min_historical_records: 57
+
+max_collateral: 15000
+min_probability: 0.70
+min_bid: 0.10
+min_open_interest: 100
+contract_open_interest_minimum: 0
+
+option_contract_page_limit: 10000
+max_api_calls_per_minute: 180
+paper_trading: true
+
+options_url: "https://www.nasdaqtrader.com/dynamic/SymDir/options.txt"
