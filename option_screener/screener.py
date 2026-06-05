@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 
 from option_screener.clients import RateLimiter, create_alpaca_clients
@@ -38,13 +39,40 @@ FINAL_OUTPUT_COLUMNS = [
     "type",
     "option_symbol",
     "option_bid_price",
+    "option_ask_price",
+    "option_bid_ask_spread",
+    "option_mid_price",
+    "option_spread_pct",
+    "quote_timestamp",
+    "quote_age_minutes",
+    "bid_size",
+    "ask_size",
+    "trade_price",
+    "trade_size",
+    "daily_volume",
+    "daily_trade_count",
+    "daily_vwap",
+    "prev_daily_volume",
+    "prev_daily_trade_count",
+    "prev_daily_vwap",
+    "implied_volatility",
+    "historical_volatility",
+    "iv_minus_hv",
+    "iv_to_hv_ratio",
+    "delta",
+    "gamma",
+    "theta",
+    "vega",
+    "rho",
     "underlying_price",
-    "volatility",
+    "dollar_out_of_the_money",
+    "percent_out_of_the_money",
     "days_till_expiry",
     "prob_put_expires_worthless",
     "contract_revenue",
     "collateral",
     "potential_return",
+    "annualized_return",
 ]
 
 
@@ -93,7 +121,7 @@ def assemble_screener_data(
             row["strike_price"],
             row["time_till_expiry"],
             row["risk_free_rate"],
-            row["volatility"],
+            row["implied_volatility"],
         ),
         axis=1,
     )
@@ -111,10 +139,6 @@ def clean_final_output(df: pd.DataFrame) -> pd.DataFrame:
         "size",
         "id",
         "symbol",
-        "bid_size",
-        "ask_size",
-        "quote_timestamp",
-        "trade_size",
         "trade_timestamp",
         "ticker",
         "symbol_latest",
@@ -127,19 +151,43 @@ def clean_final_output(df: pd.DataFrame) -> pd.DataFrame:
         "symbol_latest_2",
         "time_till_expiry",
         "risk_free_rate",
-        "ask_price",
-        "trade_price",
         "close_price",
         "close_price_date",
-        "implied_volatility",
-        "delta",
-        "gamma",
-        "theta",
-        "vega",
-        "rho",
     ]
     output.drop(columns=cols_to_drop, inplace=True, errors="ignore")
-    output.rename(columns={"bid_price": "option_bid_price"}, inplace=True)
+    output.rename(
+        columns={
+            "bid_price": "option_bid_price",
+            "ask_price": "option_ask_price",
+            "volatility": "historical_volatility",
+        },
+        inplace=True,
+    )
+    if {"option_bid_price", "option_ask_price"}.issubset(output.columns):
+        output["option_bid_ask_spread"] = (
+            output["option_ask_price"] - output["option_bid_price"]
+        )
+        output["option_mid_price"] = (
+            output["option_ask_price"] + output["option_bid_price"]
+        ) / 2
+        output["option_spread_pct"] = (
+            output["option_bid_ask_spread"] / output["option_mid_price"]
+        )
+    if {"implied_volatility", "historical_volatility"}.issubset(output.columns):
+        output["iv_minus_hv"] = (
+            output["implied_volatility"] - output["historical_volatility"]
+        )
+        output["iv_to_hv_ratio"] = (
+            output["implied_volatility"] / output["historical_volatility"]
+        )
+        output.loc[output["historical_volatility"] <= 0, "iv_to_hv_ratio"] = pd.NA
+    if "quote_timestamp" in output.columns:
+        quote_timestamps = pd.to_datetime(output["quote_timestamp"], utc=True, errors="coerce")
+        now = pd.Timestamp.now(tz="UTC")
+        output["quote_age_minutes"] = (
+            (now - quote_timestamps).dt.total_seconds() / 60
+        )
+        output["quote_timestamp"] = quote_timestamps.dt.strftime("%Y-%m-%d %H:%M:%S%z")
     if "expiration_date" in output.columns:
         output["expiration_date"] = pd.to_datetime(output["expiration_date"]).dt.strftime("%Y-%m-%d")
     return output
@@ -150,6 +198,25 @@ def add_return_columns(df: pd.DataFrame) -> pd.DataFrame:
     output["contract_revenue"] = output["option_bid_price"] * 100
     output["collateral"] = output["strike_price"] * 100
     output["potential_return"] = output["contract_revenue"] / output["collateral"]
+    output["annualized_return"] = pd.NA
+    valid_days = output["days_till_expiry"] > 0
+    output.loc[valid_days, "annualized_return"] = (
+        output.loc[valid_days, "potential_return"]
+        * 365
+        / output.loc[valid_days, "days_till_expiry"]
+    )
+    return output
+
+
+def add_moneyness_columns(df: pd.DataFrame) -> pd.DataFrame:
+    output = df.copy()
+    output["dollar_out_of_the_money"] = (
+        output["underlying_price"] - output["strike_price"]
+    )
+    output["percent_out_of_the_money"] = (
+        output["dollar_out_of_the_money"] / output["underlying_price"]
+    )
+    output.loc[output["underlying_price"] <= 0, "percent_out_of_the_money"] = pd.NA
     return output
 
 
@@ -159,9 +226,15 @@ def round_output_columns(df: pd.DataFrame) -> pd.DataFrame:
         "strike_price",
         "close_price",
         "bid_price",
-        "ask_price",
+        "option_bid_price",
+        "option_ask_price",
+        "option_bid_ask_spread",
+        "option_mid_price",
         "trade_price",
+        "daily_vwap",
+        "prev_daily_vwap",
         "underlying_price",
+        "dollar_out_of_the_money",
         "contract_revenue",
         "collateral",
     ]
@@ -172,9 +245,15 @@ def round_output_columns(df: pd.DataFrame) -> pd.DataFrame:
         "theta",
         "vega",
         "rho",
-        "volatility",
+        "historical_volatility",
+        "iv_minus_hv",
+        "iv_to_hv_ratio",
+        "option_spread_pct",
+        "quote_age_minutes",
+        "percent_out_of_the_money",
         "prob_put_expires_worthless",
         "potential_return",
+        "annualized_return",
     ]
     cols_2 = [col for col in round_cols_2 if col in output.columns]
     cols_4 = [col for col in round_cols_4 if col in output.columns]
@@ -185,6 +264,12 @@ def round_output_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def apply_filters(df: pd.DataFrame, config: ScreenerConfig) -> pd.DataFrame:
     filtered = df.copy()
+    implied_volatility = pd.to_numeric(filtered["implied_volatility"], errors="coerce")
+    filtered = filtered[
+        implied_volatility.notna()
+        & np.isfinite(implied_volatility)
+        & (implied_volatility > 0)
+    ]
     filtered = filtered[filtered["prob_put_expires_worthless"] > config.min_probability]
     filtered = filtered[filtered["collateral"] <= config.max_collateral]
     filtered = filtered[filtered["option_bid_price"] > config.min_bid]
@@ -278,6 +363,7 @@ def build_screen(credentials: AlpacaCredentials, config: ScreenerConfig) -> pd.D
         config=config,
     )
     output = clean_final_output(merged)
+    output = add_moneyness_columns(output)
     output = add_return_columns(output)
     output = round_output_columns(output)
     output = apply_filters(output, config)

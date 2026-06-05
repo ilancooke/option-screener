@@ -63,6 +63,7 @@ def create_alpaca_clients(
         option_historical_data_client=OptionHistoricalDataClient(
             credentials.api_key,
             credentials.secret_key,
+            raw_data=True,
             url_override=None,
         ),
     )

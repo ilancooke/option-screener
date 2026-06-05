@@ -40,6 +40,12 @@ OPTION_CHAIN_COLUMNS = [
     "trade_price",
     "trade_size",
     "trade_timestamp",
+    "daily_volume",
+    "daily_trade_count",
+    "daily_vwap",
+    "prev_daily_volume",
+    "prev_daily_trade_count",
+    "prev_daily_vwap",
     "implied_volatility",
     "delta",
     "gamma",
@@ -55,6 +61,18 @@ def _model_to_dict(model: object) -> dict:
     if hasattr(model, "dict"):
         return model.dict()
     return dict(model)
+
+
+def _get_value(obj: object, attr_name: str, raw_key: str):
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(raw_key)
+    return getattr(obj, attr_name, None)
+
+
+def _get_snapshot_value(snapshot: object, attr_name: str, raw_key: str):
+    return _get_value(snapshot, attr_name, raw_key)
 
 
 def get_all_option_contracts(
@@ -165,27 +183,45 @@ def flatten_option_chain(option_data: dict) -> pd.DataFrame:
     records = []
 
     for symbol, snapshot in option_data.items():
-        quote = snapshot.latest_quote
-        trade = snapshot.latest_trade
-        greeks = snapshot.greeks
+        quote = _get_snapshot_value(snapshot, "latest_quote", "latestQuote")
+        trade = _get_snapshot_value(snapshot, "latest_trade", "latestTrade")
+        greeks = _get_snapshot_value(snapshot, "greeks", "greeks")
+        daily_bar = _get_snapshot_value(snapshot, "daily_bar", "dailyBar")
+        prev_daily_bar = _get_snapshot_value(
+            snapshot,
+            "previous_daily_bar",
+            "prevDailyBar",
+        )
 
         records.append(
             {
                 "option_symbol": symbol,
-                "bid_price": quote.bid_price if quote else None,
-                "bid_size": quote.bid_size if quote else None,
-                "ask_price": quote.ask_price if quote else None,
-                "ask_size": quote.ask_size if quote else None,
-                "quote_timestamp": quote.timestamp if quote else None,
-                "trade_price": trade.price if trade else None,
-                "trade_size": trade.size if trade else None,
-                "trade_timestamp": trade.timestamp if trade else None,
-                "implied_volatility": snapshot.implied_volatility,
-                "delta": greeks.delta if greeks else None,
-                "gamma": greeks.gamma if greeks else None,
-                "theta": greeks.theta if greeks else None,
-                "vega": greeks.vega if greeks else None,
-                "rho": greeks.rho if greeks else None,
+                "bid_price": _get_value(quote, "bid_price", "bp"),
+                "bid_size": _get_value(quote, "bid_size", "bs"),
+                "ask_price": _get_value(quote, "ask_price", "ap"),
+                "ask_size": _get_value(quote, "ask_size", "as"),
+                "quote_timestamp": _get_value(quote, "timestamp", "t"),
+                "trade_price": _get_value(trade, "price", "p"),
+                "trade_size": _get_value(trade, "size", "s"),
+                "trade_timestamp": _get_value(trade, "timestamp", "t"),
+                "daily_volume": _get_value(daily_bar, "volume", "v"),
+                "daily_trade_count": _get_value(daily_bar, "trade_count", "n"),
+                "daily_vwap": _get_value(daily_bar, "vwap", "vw"),
+                "prev_daily_volume": _get_value(prev_daily_bar, "volume", "v"),
+                "prev_daily_trade_count": (
+                    _get_value(prev_daily_bar, "trade_count", "n")
+                ),
+                "prev_daily_vwap": _get_value(prev_daily_bar, "vwap", "vw"),
+                "implied_volatility": _get_snapshot_value(
+                    snapshot,
+                    "implied_volatility",
+                    "impliedVolatility",
+                ),
+                "delta": _get_value(greeks, "delta", "delta"),
+                "gamma": _get_value(greeks, "gamma", "gamma"),
+                "theta": _get_value(greeks, "theta", "theta"),
+                "vega": _get_value(greeks, "vega", "vega"),
+                "rho": _get_value(greeks, "rho", "rho"),
             }
         )
 

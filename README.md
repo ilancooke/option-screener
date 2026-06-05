@@ -65,5 +65,6 @@ python3 scripts/run_screener.py \
 
 ## Notes
 
-- The current probability calculation intentionally matches the prototype and uses historical volatility.
+- The primary probability calculation uses option implied volatility. Historical volatility is preserved for comparison.
+- Contracts with missing, non-finite, zero, or negative implied volatility are excluded from the final screen.
 - See `ROADMAP.md` for planned methodology improvements.
