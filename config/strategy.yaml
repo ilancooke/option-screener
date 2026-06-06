@@ -4,12 +4,12 @@
 # usually supplied as CLI arguments.
 
 option_type: put
-risk_free_rate: 0.0435
+risk_free_rate: 0.0371
 historical_days: 90
 trading_days: 252
 min_historical_records: 57
 
-max_collateral: 15000
+max_collateral: 20000
 min_probability: 0.70
 min_bid: 0.10
 min_open_interest: 100

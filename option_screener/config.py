@@ -36,7 +36,7 @@ class AlpacaCredentials:
 
 @dataclass(frozen=True)
 class ScreenerConfig:
-    expiration_date: str = "2025-08-15"
+    expiration_date: str | None = None
     option_type: str = "put"
     risk_free_rate: float = 0.0435
     historical_days: int = 90
@@ -55,7 +55,7 @@ class ScreenerConfig:
     paper_trading: bool = True
 
     options_url: str = "https://www.nasdaqtrader.com/dynamic/SymDir/options.txt"
-    output_path: Path = Path("output20250815.xlsx")
+    output_path: Path = Path("output.xlsx")
 
     @classmethod
     def from_yaml(cls, path: Path) -> "ScreenerConfig":
@@ -78,6 +78,45 @@ class ScreenerConfig:
         values = {field.name: getattr(self, field.name) for field in fields(self)}
         values.update({key: value for key, value in overrides.items() if value is not None})
         return type(self)(**_coerce_config_values(values))
+
+    def validate(self) -> None:
+        errors = []
+
+        if not self.expiration_date:
+            errors.append("expiration_date is required")
+        if self.option_type not in {"put", "call"}:
+            errors.append("option_type must be 'put' or 'call'")
+        if not 0 <= self.risk_free_rate <= 1:
+            errors.append("risk_free_rate must be between 0 and 1")
+        if self.historical_days <= 0:
+            errors.append("historical_days must be greater than 0")
+        if self.trading_days <= 0:
+            errors.append("trading_days must be greater than 0")
+        if self.min_historical_records < 0:
+            errors.append("min_historical_records must be greater than or equal to 0")
+        if self.max_collateral <= 0:
+            errors.append("max_collateral must be greater than 0")
+        if not 0 <= self.min_probability <= 1:
+            errors.append("min_probability must be between 0 and 1")
+        if self.min_bid < 0:
+            errors.append("min_bid must be greater than or equal to 0")
+        if self.min_open_interest < 0:
+            errors.append("min_open_interest must be greater than or equal to 0")
+        if self.contract_open_interest_minimum < 0:
+            errors.append(
+                "contract_open_interest_minimum must be greater than or equal to 0"
+            )
+        if self.option_contract_page_limit <= 0:
+            errors.append("option_contract_page_limit must be greater than 0")
+        if self.max_api_calls_per_minute <= 0:
+            errors.append("max_api_calls_per_minute must be greater than 0")
+        if self.symbol_limit is not None and self.symbol_limit <= 0:
+            errors.append("symbol_limit must be greater than 0 when provided")
+        if not self.options_url:
+            errors.append("options_url is required")
+
+        if errors:
+            raise ValueError("Invalid screener config: " + "; ".join(errors))
 
 
 def _coerce_config_values(values: dict[str, Any]) -> dict[str, Any]:

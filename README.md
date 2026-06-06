@@ -1,8 +1,8 @@
 # option-screener
 
-Prototype-to-package conversion of a cash-secured put option screener using Alpaca market data.
+Cash-secured put option screener using Alpaca market data.
 
-The original exploratory workflow lives in `prototype/alpaca.ipynb`. The package version keeps the same core methodology and default filters while moving credentials, configuration, rate limiting, and output into ordinary Python modules.
+The original exploratory workflow lives in `prototype/alpaca.ipynb`. The production path is the Python package and CLI in `option_screener/` and `scripts/run_screener.py`.
 
 ## Setup
 
@@ -12,12 +12,14 @@ python3 -m venv .venv
 pip install -r requirements.txt
 ```
 
-Set Alpaca credentials in your environment:
+Set Alpaca credentials in `.env` or in your shell environment:
 
-```bash
-export ALPACA_API_KEY=...
-export ALPACA_SECRET_KEY=...
+```text
+ALPACA_API_KEY=...
+ALPACA_SECRET_KEY=...
 ```
+
+The CLI automatically loads `.env`. Existing shell environment variables take precedence.
 
 ## Run
 
@@ -40,12 +42,15 @@ Stable strategy defaults live in `config/strategy.yaml`:
 
 - put options
 - 90 calendar days of historical prices
-- 4.35% risk-free rate
+- 3.71% risk-free rate
 - 70% minimum estimated probability of expiring worthless
-- $15,000 maximum collateral
+- $20,000 maximum collateral
 - $0.10 minimum bid
 - 100 minimum open interest
 - 180 Alpaca API calls per minute
+
+`option_screener/config.py` defines the config schema and fallback defaults.
+`config/strategy.yaml` is the documented strategy configuration for this project.
 
 Per-run values are usually passed through the CLI:
 
@@ -67,4 +72,6 @@ python3 scripts/run_screener.py \
 
 - The primary probability calculation uses option implied volatility. Historical volatility is preserved for comparison.
 - Contracts with missing, non-finite, zero, or negative implied volatility are excluded from the final screen.
+- The output includes diagnostics for bid/ask spread, quote age, option volume, Greeks, IV/HV comparison, moneyness, annualized return, downside stress, and scenario EV.
+- When multiple contracts pass for the same underlying, the screener currently keeps the highest `potential_return` contract.
 - See `ROADMAP.md` for planned methodology improvements.

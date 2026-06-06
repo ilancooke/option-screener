@@ -40,3 +40,28 @@ def test_screener_config_with_overrides_ignores_none_values():
 
     assert updated.historical_days == 90
     assert updated.expiration_date == "2026-08-21"
+
+
+def test_screener_config_validate_requires_expiration_date():
+    config = ScreenerConfig(expiration_date=None)
+
+    with pytest.raises(ValueError, match="expiration_date is required"):
+        config.validate()
+
+
+def test_screener_config_validate_rejects_invalid_thresholds():
+    config = ScreenerConfig(
+        expiration_date="2026-07-17",
+        min_probability=1.5,
+        max_collateral=0,
+        symbol_limit=0,
+    )
+
+    with pytest.raises(ValueError, match="min_probability"):
+        config.validate()
+
+
+def test_screener_config_validate_accepts_valid_config():
+    config = ScreenerConfig(expiration_date="2026-07-17")
+
+    config.validate()

@@ -10,6 +10,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from dotenv import load_dotenv
+
 from option_screener.config import AlpacaCredentials, ScreenerConfig
 from option_screener.screener import run_screener
 
@@ -49,6 +51,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    load_dotenv()
     logging.basicConfig(
         level=getattr(logging, args.log_level.upper()),
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",
@@ -69,6 +72,10 @@ def main() -> None:
         output_path=args.output,
         paper_trading=False if args.live_trading else None,
     )
+    try:
+        config.validate()
+    except ValueError as error:
+        raise SystemExit(f"Configuration error: {error}") from error
     credentials = AlpacaCredentials.from_env()
     run_screener(credentials, config)
 

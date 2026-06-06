@@ -31,30 +31,47 @@ from option_screener.volatility import (
 LOGGER = logging.getLogger(__name__)
 
 FINAL_OUTPUT_COLUMNS = [
-    "name",
     "underlying_symbol",
-    "strike_price",
-    "expiration_date",
-    "open_interest",
-    "type",
     "option_symbol",
+    "name",
+    "type",
+    "expiration_date",
+    "days_till_expiry",
+    "underlying_price",
+    "strike_price",
+    "dollar_out_of_the_money",
+    "percent_out_of_the_money",
+    "prob_put_expires_worthless",
+    "annualized_return",
+    "potential_return",
+    "scenario_ev_return_down_20_pct",
+    "scenario_ev_down_20_pct",
+    "scenario_ev_return_down_10_pct",
+    "scenario_ev_down_10_pct",
+    "contract_revenue",
+    "collateral",
+    "pl_if_underlying_down_10_pct",
+    "return_if_underlying_down_10_pct",
+    "pl_if_underlying_down_20_pct",
+    "return_if_underlying_down_20_pct",
     "option_bid_price",
     "option_ask_price",
-    "option_bid_ask_spread",
     "option_mid_price",
+    "option_bid_ask_spread",
     "option_spread_pct",
-    "quote_timestamp",
-    "quote_age_minutes",
     "bid_size",
     "ask_size",
-    "trade_price",
-    "trade_size",
+    "quote_timestamp",
+    "quote_age_minutes",
+    "open_interest",
     "daily_volume",
     "daily_trade_count",
     "daily_vwap",
     "prev_daily_volume",
     "prev_daily_trade_count",
     "prev_daily_vwap",
+    "trade_price",
+    "trade_size",
     "implied_volatility",
     "historical_volatility",
     "iv_minus_hv",
@@ -64,20 +81,17 @@ FINAL_OUTPUT_COLUMNS = [
     "theta",
     "vega",
     "rho",
-    "underlying_price",
-    "dollar_out_of_the_money",
-    "percent_out_of_the_money",
-    "days_till_expiry",
-    "prob_put_expires_worthless",
-    "contract_revenue",
-    "collateral",
-    "potential_return",
-    "annualized_return",
 ]
 
 
 def empty_final_output() -> pd.DataFrame:
     return pd.DataFrame(columns=FINAL_OUTPUT_COLUMNS)
+
+
+def order_output_columns(df: pd.DataFrame) -> pd.DataFrame:
+    ordered_columns = [column for column in FINAL_OUTPUT_COLUMNS if column in df.columns]
+    extra_columns = [column for column in df.columns if column not in FINAL_OUTPUT_COLUMNS]
+    return df[ordered_columns + extra_columns]
 
 
 def assemble_screener_data(
@@ -220,6 +234,45 @@ def add_moneyness_columns(df: pd.DataFrame) -> pd.DataFrame:
     return output
 
 
+def add_downside_stress_columns(df: pd.DataFrame) -> pd.DataFrame:
+    output = df.copy()
+    stress_scenarios = {
+        "10": 0.10,
+        "20": 0.20,
+    }
+
+    for label, stress_pct in stress_scenarios.items():
+        stressed_price = output["underlying_price"] * (1 - stress_pct)
+        assignment_loss = (
+            (output["strike_price"] - stressed_price).clip(lower=0) * 100
+        )
+        pl_column = f"pl_if_underlying_down_{label}_pct"
+        return_column = f"return_if_underlying_down_{label}_pct"
+        output[pl_column] = output["contract_revenue"] - assignment_loss
+        output[return_column] = output[pl_column] / output["collateral"]
+        output.loc[output["collateral"] <= 0, return_column] = pd.NA
+
+    return output
+
+
+def add_scenario_expected_value_columns(df: pd.DataFrame) -> pd.DataFrame:
+    output = df.copy()
+    scenarios = ["10", "20"]
+
+    for label in scenarios:
+        stress_pl_column = f"pl_if_underlying_down_{label}_pct"
+        ev_column = f"scenario_ev_down_{label}_pct"
+        ev_return_column = f"scenario_ev_return_down_{label}_pct"
+        output[ev_column] = (
+            output["prob_put_expires_worthless"] * output["contract_revenue"]
+            + (1 - output["prob_put_expires_worthless"]) * output[stress_pl_column]
+        )
+        output[ev_return_column] = output[ev_column] / output["collateral"]
+        output.loc[output["collateral"] <= 0, ev_return_column] = pd.NA
+
+    return output
+
+
 def round_output_columns(df: pd.DataFrame) -> pd.DataFrame:
     output = df.copy()
     round_cols_2 = [
@@ -237,6 +290,10 @@ def round_output_columns(df: pd.DataFrame) -> pd.DataFrame:
         "dollar_out_of_the_money",
         "contract_revenue",
         "collateral",
+        "pl_if_underlying_down_10_pct",
+        "pl_if_underlying_down_20_pct",
+        "scenario_ev_down_10_pct",
+        "scenario_ev_down_20_pct",
     ]
     round_cols_4 = [
         "implied_volatility",
@@ -254,6 +311,10 @@ def round_output_columns(df: pd.DataFrame) -> pd.DataFrame:
         "prob_put_expires_worthless",
         "potential_return",
         "annualized_return",
+        "return_if_underlying_down_10_pct",
+        "return_if_underlying_down_20_pct",
+        "scenario_ev_return_down_10_pct",
+        "scenario_ev_return_down_20_pct",
     ]
     cols_2 = [col for col in round_cols_2 if col in output.columns]
     cols_4 = [col for col in round_cols_4 if col in output.columns]
@@ -365,8 +426,11 @@ def build_screen(credentials: AlpacaCredentials, config: ScreenerConfig) -> pd.D
     output = clean_final_output(merged)
     output = add_moneyness_columns(output)
     output = add_return_columns(output)
+    output = add_downside_stress_columns(output)
+    output = add_scenario_expected_value_columns(output)
     output = round_output_columns(output)
     output = apply_filters(output, config)
+    output = order_output_columns(output)
     LOGGER.info("Final screen has %d rows", len(output))
     return output
 
