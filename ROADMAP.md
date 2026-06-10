@@ -4,6 +4,17 @@ This repo now contains a Python CLI/package for generating cash-secured put cand
 
 ## Future Improvement
 
+### Evaluate Removing Option Contracts Fetch
+
+The screener currently fetches paginated option contract metadata before fetching option chain snapshots. This can return more than 100,000 contracts for a full run and adds latency/API load.
+
+The main non-replaceable field from the contracts endpoint appears to be `open_interest`. Other fields, such as strike, expiration, option type, and underlying symbol, can be derived from the option symbol or are already known from the request.
+
+Evaluate whether the production path can rely primarily on option chain snapshots plus parsed OCC option symbols, and either:
+
+- remove the contracts endpoint and drop open-interest filtering, or
+- make open-interest filtering optional so faster snapshot-only runs are possible.
+
 ### Backtest The Screening Rules
 
 Build a backtesting workflow that runs the screener logic over historical dates and expirations, then measures realized outcomes through expiration.

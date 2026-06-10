@@ -54,7 +54,6 @@ class ScreenerConfig:
     symbol_limit: int | None = None
     paper_trading: bool = True
 
-    options_url: str = "https://www.nasdaqtrader.com/dynamic/SymDir/options.txt"
     output_path: Path = Path("output.xlsx")
 
     @classmethod
@@ -112,9 +111,6 @@ class ScreenerConfig:
             errors.append("max_api_calls_per_minute must be greater than 0")
         if self.symbol_limit is not None and self.symbol_limit <= 0:
             errors.append("symbol_limit must be greater than 0 when provided")
-        if not self.options_url:
-            errors.append("options_url is required")
-
         if errors:
             raise ValueError("Invalid screener config: " + "; ".join(errors))
 

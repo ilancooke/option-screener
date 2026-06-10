@@ -52,6 +52,8 @@ Stable strategy defaults live in `config/strategy.yaml`:
 `option_screener/config.py` defines the config schema and fallback defaults.
 `config/strategy.yaml` is the documented strategy configuration for this project.
 
+The screener universe comes from Alpaca's Assets API using the `has_options` attribute, filtered to active US equities on NASDAQ or NYSE.
+
 Per-run values are usually passed through the CLI:
 
 - `--expiration-date`

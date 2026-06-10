@@ -18,5 +18,3 @@ contract_open_interest_minimum: 0
 option_contract_page_limit: 10000
 max_api_calls_per_minute: 180
 paper_trading: true
-
-options_url: "https://www.nasdaqtrader.com/dynamic/SymDir/options.txt"
